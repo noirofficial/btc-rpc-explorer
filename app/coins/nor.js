@@ -37,10 +37,10 @@ module.exports = {
 	name:"Noir",
 	ticker:"NOR",
 	logoUrlsByNetwork:{
-		"main":"./img/logo/btc.svg",
-		"test":"./img/logo/tbtc.svg",
-		"regtest":"./img/logo/tbtc.svg",
-		"signet":"./img/logo/signet.svg"
+		"main":"./img/logo/nor.svg",
+		"test":"./img/logo/nor.svg",
+		"regtest":"./img/logo/nor.svg",
+		"signet":"./img/logo/nor.svg"
 	},
 	siteTitlesByNetwork: {
 		"main":"Noir Explorer",
@@ -84,6 +84,31 @@ module.exports = {
 	},
 	genesisCoinbaseTransactionsByNetwork:{
 		"main": {
+	      "txid": "1646db34f423b77ea40d5bfc35c63beb7c53975ff7f83e1971115ed3cf6c152a",
+	      "hash": "1646db34f423b77ea40d5bfc35c63beb7c53975ff7f83e1971115ed3cf6c152a",
+	      "version": 1,
+	      "size": 174,
+	      "vsize": 174,
+	      "weight": 696,
+	      "locktime": 0,
+	      "vin": [
+	        {
+	          "coinbase": "04ffff001d0104274e6f6972202d20436f6d6d756e697479206275696c742c20707269766163792064726976656e2e",
+	          "sequence": 4294967295
+	        }
+	      ],
+	      "vout": [
+	        {
+	          "value": 0.00000000,
+	          "n": 0,
+	          "scriptPubKey": {
+	            "asm": "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f OP_CHECKSIG",
+	            "hex": "4104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac",
+	            "type": "pubkey"
+	          }
+	        }
+	      ],
+	      "hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff2f04ffff001d0104274e6f6972202d20436f6d6d756e697479206275696c742c20707269766163792064726976656e2effffffff010000000000000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000"
 		},
 		"test": {
 		},
@@ -268,6 +293,9 @@ module.exports = {
 		}
 	},
 	blockRewardFunction:function(blockHeight, chain) {
+		if (blockHeight == 0)
+			return new Decimal8(0);
+
 		return new Decimal8(2.2);
 	}
 };
