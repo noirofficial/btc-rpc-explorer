@@ -16,7 +16,7 @@ if (!baseUrl.endsWith("/")) {
 var coins = require("./coins.js");
 var credentials = require("./credentials.js");
 
-var currentCoin = process.env.BTCEXP_COIN || "BTC";
+var currentCoin = process.env.BTCEXP_COIN || "NOR";
 
 var rpcCred = credentials.rpc;
 

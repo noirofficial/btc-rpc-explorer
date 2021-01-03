@@ -314,6 +314,7 @@ function refreshNetworkVolumes() {
 		var promises = [];
 
 		var blocksPerDay = 144 + 20; // 20 block padding
+		console.log(result.blocks);
 
 		for (var i = 0; i < (blocksPerDay * 1); i++) {
 			if (result.blocks - i >= 0) {
