@@ -1,95 +1,87 @@
-var debug = require("debug");
+"use strict";
 
-var debugLog = debug("btcexp:core");
+const debug = require("debug");
+const debugLog = debug("btcexp:core");
 
-var LRU = require("lru-cache");
-var fs = require('fs');
+const fs = require('fs');
 
-var utils = require("../utils.js");
-var config = require("../config.js");
-var coins = require("../coins.js");
-var redisCache = require("../redisCache.js");
-var Decimal = require("decimal.js");
-var md5 = require("md5");
+const utils = require("../utils.js");
+const redisCache = require("../redisCache.js");
+const cacheUtils = require("../cacheUtils.js");
+const config = require("../config.js");
+const coins = require("../coins.js");
+const Decimal = require("decimal.js");
+const md5 = require("md5");
+const statTracker = require("../statTracker.js");
+const async = require("async");
 
 // choose one of the below: RPC to a node, or mock data while testing
-var rpcApi = require("./rpcApi.js");
+const rpcApi = require("./rpcApi.js");
 //var rpcApi = require("./mockApi.js");
 
 
 // this value should be incremented whenever data format changes, to avoid
 // pulling old-format data from a persistent cache
-var cacheKeyVersion = "v1";
+const cacheKeyVersion = "v1";
 
 
 const ONE_SEC = 1000;
 const ONE_MIN = 60 * ONE_SEC;
 const ONE_HR = 60 * ONE_MIN;
+const FIFTEEN_MIN = 15 * ONE_MIN;
 const ONE_DAY = 24 * ONE_HR;
-const ONE_YR = 265 * ONE_DAY;
-
-
-
-function createMemoryLruCache(cacheObj, onCacheEvent) {
-	return {
-		get:function(key) {
-			return new Promise(function(resolve, reject) {
-				onCacheEvent("memory", "try", key);
-
-				var val = cacheObj.get(key);
-
-				if (val != null) {
-					onCacheEvent("memory", "hit", key);
-
-				} else {
-					onCacheEvent("memory", "miss", key);
-				}
-
-				resolve(cacheObj.get(key));
-			});
-		},
-		set:function(key, obj, maxAge) { cacheObj.set(key, obj, maxAge); }
-	}
-}
-
-function tryCache(cacheKey, cacheObjs, index, resolve, reject) {
-	if (index == cacheObjs.length) {
-		resolve(null);
-
-		return;
-	}
-
-	cacheObjs[index].get(cacheKey).then(function(result) {
-		if (result != null) {
-			resolve(result);
-
-		} else {
-			tryCache(cacheKey, cacheObjs, index + 1, resolve, reject);
-		}
-	});
-}
-
-function createTieredCache(cacheObjs) {
-	return {
-		get:function(key) {
-			return new Promise(function(resolve, reject) {
-				tryCache(key, cacheObjs, 0, resolve, reject);
-			});
-		},
-		set:function(key, obj, maxAge) {
-			for (var i = 0; i < cacheObjs.length; i++) {
-				cacheObjs[i].set(key, obj, maxAge);
-			}
-		}
-	}
-}
+const ONE_YR = 365 * ONE_DAY;
 
 
 
 
-var miscCaches = [];
-var blockCaches = [];
-var txCaches = [];
+
+
+
+
+const miscCaches = [];
+const blockCaches = [];
+const txCaches = [];
+const miningSummaryCaches = [];
+
+global.miscLruCache = cacheUtils.lruCache(config.slowDeviceMode ? 200 : 1000);
+global.blockLruCache = cacheUtils.lruCache(config.slowDeviceMode ? 200 : 1000);
+global.txLruCache = cacheUtils.lruCache(config.slowDeviceMode ? 200 : 1000);
+global.miningSummaryLruCache = cacheUtils.lruCache(config.slowDeviceMode ? 500 : 4500);
+
+global.lruCaches = [ global.miscLruCache, global.blockLruCache, global.txLruCache, global.miningSummaryLruCache ];
+
+(function () {
+	let pruneCaches = function() {
+		let totalLengthBefore = 0;
+		global.lruCaches.forEach(x => (totalLengthBefore += x.length));
+
+		global.lruCaches.forEach(x => x.prune());
+
+		let totalLengthAfter = 0;
+		global.lruCaches.forEach(x => (totalLengthAfter += x.length));
+
+
+		statTracker.trackEvent("caches.pruned-items", (totalLengthBefore - totalLengthAfter));
+		
+		statTracker.trackValue("caches.misc.length", global.miscLruCache.length);
+		statTracker.trackValue("caches.misc.itemCount", global.miscLruCache.itemCount);
+
+		statTracker.trackValue("caches.block.length", global.blockLruCache.length);
+		statTracker.trackValue("caches.block.itemCount", global.blockLruCache.itemCount);
+
+		statTracker.trackValue("caches.tx.length", global.txLruCache.length);
+		statTracker.trackValue("caches.tx.itemCount", global.txLruCache.itemCount);
+
+		statTracker.trackValue("caches.mining.length", global.miningSummaryLruCache.length);
+		statTracker.trackValue("caches.mining.itemCount", global.miningSummaryLruCache.itemCount);
+
+
+		debugLog(`Pruned caches: ${totalLengthBefore.toLocaleString()} -> ${totalLengthAfter.toLocaleString()}`);
+	};
+
+	setInterval(pruneCaches, 60000);
+})();
 
 if (!config.noInmemoryRpcCache) {
 	global.cacheStats.memory = {
@@ -100,12 +92,14 @@ if (!config.noInmemoryRpcCache) {
 
 	var onMemoryCacheEvent = function(cacheType, eventType, cacheKey) {
 		global.cacheStats.memory[eventType]++;
+		statTracker.trackEvent(`caches.memory.${eventType}`);
 		//debugLog(`cache.${cacheType}.${eventType}: ${cacheKey}`);
 	}
 
-	miscCaches.push(createMemoryLruCache(new LRU(2000), onMemoryCacheEvent));
-	blockCaches.push(createMemoryLruCache(new LRU(2000), onMemoryCacheEvent));
-	txCaches.push(createMemoryLruCache(new LRU(10000), onMemoryCacheEvent));
+	miscCaches.push(cacheUtils.createMemoryLruCache(global.miscLruCache, onMemoryCacheEvent));
+	blockCaches.push(cacheUtils.createMemoryLruCache(global.blockLruCache, onMemoryCacheEvent));
+	txCaches.push(cacheUtils.createMemoryLruCache(global.txLruCache, onMemoryCacheEvent));
+	miningSummaryCaches.push(cacheUtils.createMemoryLruCache(global.miningSummaryLruCache, onMemoryCacheEvent));
 }
 
 if (redisCache.active) {
@@ -118,6 +112,7 @@ if (redisCache.active) {
 
 	var onRedisCacheEvent = function(cacheType, eventType, cacheKey) {
 		global.cacheStats.redis[eventType]++;
+		statTracker.trackEvent(`caches.redis.${eventType}`);
 		//debugLog(`cache.${cacheType}.${eventType}: ${cacheKey}`);
 	}
 
@@ -132,11 +127,13 @@ if (redisCache.active) {
 	miscCaches.push(redisCacheObj);
 	blockCaches.push(redisCacheObj);
 	txCaches.push(redisCacheObj);
+	miningSummaryCaches.push(redisCacheObj);
 }
 
-var miscCache = createTieredCache(miscCaches);
-var blockCache = createTieredCache(blockCaches);
-var txCache = createTieredCache(txCaches);
+const miscCache = cacheUtils.createTieredCache(miscCaches);
+const blockCache = cacheUtils.createTieredCache(blockCaches);
+const txCache = cacheUtils.createTieredCache(txCaches);
+const miningSummaryCache = cacheUtils.createTieredCache(miningSummaryCaches);
 
 
 
@@ -203,7 +200,11 @@ function shouldCacheTransaction(tx) {
 		return false;
 	}
 
-	if (tx.vin != null && tx.vin.length > 9) {
+	if (tx.vin != null && tx.vin.length > 5) {
+		return false;
+	}
+
+	if (tx.vout != null && tx.vout.length > 5) {
 		return false;
 	}
 
@@ -228,9 +229,13 @@ function getMempoolInfo() {
 	return tryCacheThenRpcApi(miscCache, "getMempoolInfo", 5 * ONE_SEC, rpcApi.getMempoolInfo);
 }
 
-function getMempoolTxids() {
+function getIndexInfo() {
+	return tryCacheThenRpcApi(miscCache, "getIndexInfo", 10 * ONE_SEC, rpcApi.getIndexInfo);
+}
+
+function getAllMempoolTxids() {
 	// no caching, that would be dumb
-	return rpcApi.getMempoolTxids();
+	return rpcApi.getAllMempoolTxids();
 }
 
 function getMiningInfo() {
@@ -242,31 +247,31 @@ function getUptimeSeconds() {
 }
 
 function getChainTxStats(blockCount) {
-	return tryCacheThenRpcApi(miscCache, "getChainTxStats-" + blockCount, 20 * ONE_MIN, function() {
+	return tryCacheThenRpcApi(miscCache, "getChainTxStats-" + blockCount, FIFTEEN_MIN, function() {
 		return rpcApi.getChainTxStats(blockCount);
 	});
 }
 
 function getNetworkHashrate(blockCount) {
-	return tryCacheThenRpcApi(miscCache, "getNetworkHashrate-" + blockCount, 20 * ONE_MIN, function() {
+	return tryCacheThenRpcApi(miscCache, "getNetworkHashrate-" + blockCount, FIFTEEN_MIN, function() {
 		return rpcApi.getNetworkHashrate(blockCount);
 	});
 }
 
 function getBlockStats(hash) {
-	return tryCacheThenRpcApi(miscCache, "getBlockStats-" + hash, ONE_YR, function() {
+	return tryCacheThenRpcApi(miscCache, "getBlockStats-" + hash, FIFTEEN_MIN, function() {
 		return rpcApi.getBlockStats(hash);
 	});
 }
 
 function getBlockStatsByHeight(height) {
-	return tryCacheThenRpcApi(miscCache, "getBlockStatsByHeight-" + height, ONE_YR, function() {
+	return tryCacheThenRpcApi(miscCache, "getBlockStatsByHeight-" + height, FIFTEEN_MIN, function() {
 		return rpcApi.getBlockStatsByHeight(height);
 	});
 }
 
 function getUtxoSetSummary() {
-	return tryCacheThenRpcApi(miscCache, "getUtxoSetSummary", 15 * ONE_MIN, rpcApi.getUtxoSetSummary);
+	return tryCacheThenRpcApi(miscCache, "getUtxoSetSummary", FIFTEEN_MIN, rpcApi.getUtxoSetSummary);
 }
 
 function getTxCountStats(dataPtCount, blockStart, blockEnd) {
@@ -402,17 +407,30 @@ function getPeerSummary() {
 				}
 			});
 
-
+			let serviceNamesAvailable = false;
 
 			var servicesSummaryMap = {};
 			for (var i = 0; i < getpeerinfo.length; i++) {
 				var x = getpeerinfo[i];
 
-				if (servicesSummaryMap[x.services] == null) {
-					servicesSummaryMap[x.services] = 0;
-				}
+				if (x.servicesnames) {
+					serviceNamesAvailable = true;
 
-				servicesSummaryMap[x.services]++;
+					x.servicesnames.forEach(name => {
+						if (servicesSummaryMap[name] == null) {
+							servicesSummaryMap[name] = 0;
+						}
+
+						servicesSummaryMap[name]++;
+					});
+
+				} else {
+					if (servicesSummaryMap[x.services] == null) {
+						servicesSummaryMap[x.services] = 0;
+					}
+
+					servicesSummaryMap[x.services]++;
+				}
 			}
 
 			var servicesSummary = [];
@@ -436,8 +454,79 @@ function getPeerSummary() {
 
 
 
+			if (getpeerinfo.length > 0 && getpeerinfo[0].connection_type) {
+				var connectionTypeSummaryMap = {};
+				for (var i = 0; i < getpeerinfo.length; i++) {
+					var x = getpeerinfo[i];
+
+					if (connectionTypeSummaryMap[x.connection_type] == null) {
+						connectionTypeSummaryMap[x.connection_type] = 0;
+					}
+
+					connectionTypeSummaryMap[x.connection_type]++;
+				}
+
+				var connectionTypeSummary = [];
+				for (var prop in connectionTypeSummaryMap) {
+					if (connectionTypeSummaryMap.hasOwnProperty(prop)) {
+						connectionTypeSummary.push([prop, connectionTypeSummaryMap[prop]]);
+					}
+				}
+
+				connectionTypeSummary.sort(function(a, b) {
+					if (b[1] > a[1]) {
+						return 1;
+
+					} else if (b[1] < a[1]) {
+						return -1;
+
+					} else {
+						return a[0].localeCompare(b[0]);
+					}
+				});
+
+				result.connectionTypeSummary = connectionTypeSummary;
+			}
+
+
+			if (getpeerinfo.length > 0 && getpeerinfo[0].network) {
+				var networkTypeSummaryMap = {};
+				for (var i = 0; i < getpeerinfo.length; i++) {
+					var x = getpeerinfo[i];
+
+					if (networkTypeSummaryMap[x.network] == null) {
+						networkTypeSummaryMap[x.network] = 0;
+					}
+
+					networkTypeSummaryMap[x.network]++;
+				}
+
+				var networkTypeSummary = [];
+				for (var prop in networkTypeSummaryMap) {
+					if (networkTypeSummaryMap.hasOwnProperty(prop)) {
+						networkTypeSummary.push([prop, networkTypeSummaryMap[prop]]);
+					}
+				}
+
+				networkTypeSummary.sort(function(a, b) {
+					if (b[1] > a[1]) {
+						return 1;
+
+					} else if (b[1] < a[1]) {
+						return -1;
+
+					} else {
+						return a[0].localeCompare(b[0]);
+					}
+				});
+
+				result.networkTypeSummary = networkTypeSummary;
+			}
+			
+
 			result.versionSummary = versionSummary;
 			result.servicesSummary = servicesSummary;
+			result.serviceNamesAvailable = serviceNamesAvailable;
 
 			resolve(result);
 
@@ -447,18 +536,16 @@ function getPeerSummary() {
 	});
 }
 
-function getMempoolDetails(start, count) {
+function getMempoolTxids(limit, offset) {
 	return new Promise(function(resolve, reject) {
-		tryCacheThenRpcApi(miscCache, "getMempoolTxids", ONE_SEC, rpcApi.getMempoolTxids).then(function(resultTxids) {
+		tryCacheThenRpcApi(miscCache, "getMempoolTxids", ONE_SEC, rpcApi.getAllMempoolTxids).then(function(resultTxids) {
 			var txids = [];
 
-			for (var i = start; (i < resultTxids.length && i < (start + count)); i++) {
+			for (var i = offset; (i < resultTxids.length && i < (offset + limit)); i++) {
 				txids.push(resultTxids[i]);
 			}
 
-			getRawTransactionsWithInputs(txids, config.site.txMaxInput).then(function(result) {
-				resolve({ txCount:resultTxids.length, transactions:result.transactions, txInputsByTransaction:result.txInputsByTransaction });
-			});
+			resolve({ txCount:resultTxids.length, txids:txids });
 
 		}).catch(function(err) {
 			reject(err);
@@ -467,8 +554,14 @@ function getMempoolDetails(start, count) {
 }
 
 function getBlockByHeight(blockHeight) {
-	return tryCacheThenRpcApi(blockCache, "getBlockByHeight-" + blockHeight, ONE_HR, function() {
+	return tryCacheThenRpcApi(blockCache, "getBlockByHeight-" + blockHeight, FIFTEEN_MIN, function() {
 		return rpcApi.getBlockByHeight(blockHeight);
+	});
+}
+
+function getBlockHashByHeight(blockHeight) {
+	return tryCacheThenRpcApi(blockCache, "getBlockHashByHeight-" + blockHeight, ONE_HR, function() {
+		return rpcApi.getBlockHashByHeight(blockHeight);
 	});
 }
 
@@ -489,7 +582,7 @@ function getBlocksByHeight(blockHeights) {
 }
 
 function getBlockHeaderByHeight(blockHeight) {
-	return tryCacheThenRpcApi(blockCache, "getBlockHeaderByHeight-" + blockHeight, ONE_HR, function() {
+	return tryCacheThenRpcApi(blockCache, "getBlockHeaderByHeight-" + blockHeight, FIFTEEN_MIN, function() {
 		return rpcApi.getBlockHeaderByHeight(blockHeight);
 	});
 }
@@ -527,7 +620,7 @@ function getBlocksStatsByHeight(blockHeights) {
 }
 
 function getBlockByHash(blockHash) {
-	return tryCacheThenRpcApi(blockCache, "getBlockByHash-" + blockHash, ONE_HR, function() {
+	return tryCacheThenRpcApi(blockCache, "getBlockByHash-" + blockHash, FIFTEEN_MIN, function() {
 		return rpcApi.getBlockByHash(blockHash);
 	});
 }
@@ -554,12 +647,12 @@ function getBlocksByHash(blockHashes) {
 	});
 }
 
-function getRawTransaction(txid) {
+function getRawTransaction(txid, blockhash) {
 	var rpcApiFunction = function() {
-		return rpcApi.getRawTransaction(txid);
+		return rpcApi.getRawTransaction(txid, blockhash);
 	};
 
-	return tryCacheThenRpcApi(txCache, "getRawTransaction-" + txid, ONE_HR, rpcApiFunction, shouldCacheTransaction);
+	return tryCacheThenRpcApi(txCache, "getRawTransaction-" + txid, FIFTEEN_MIN, rpcApiFunction, shouldCacheTransaction);
 }
 
 /*
@@ -595,7 +688,7 @@ function getSummarizedTransactionOutput(txid, voutIndex) {
 		});
 	};
 
-	return tryCacheThenRpcApi(txCache, `txoSummary-${txid}-${voutIndex}`, ONE_HR, rpcApiFunction, function() { return true; });
+	return tryCacheThenRpcApi(txCache, `txoSummary-${txid}-${voutIndex}`, FIFTEEN_MIN, rpcApiFunction, function() { return true; });
 }
 
 function getTxUtxos(tx) {
@@ -617,7 +710,7 @@ function getTxUtxos(tx) {
 
 function getUtxo(txid, outputIndex) {
 	return new Promise(function(resolve, reject) {
-		tryCacheThenRpcApi(miscCache, "utxo-" + txid + "-" + outputIndex, ONE_HR, function() {
+		tryCacheThenRpcApi(miscCache, "utxo-" + txid + "-" + outputIndex, FIFTEEN_MIN, function() {
 			return rpcApi.getUtxo(txid, outputIndex);
 
 		}).then(function(result) {
@@ -637,22 +730,22 @@ function getUtxo(txid, outputIndex) {
 }
 
 function getMempoolTxDetails(txid, includeAncDec) {
-	return tryCacheThenRpcApi(miscCache, "mempoolTxDetails-" + txid + "-" + includeAncDec, ONE_HR, function() {
+	return tryCacheThenRpcApi(miscCache, "mempoolTxDetails-" + txid + "-" + includeAncDec, FIFTEEN_MIN, function() {
 		return rpcApi.getMempoolTxDetails(txid, includeAncDec);
 	});
 }
 
 function getAddress(address) {
-	return tryCacheThenRpcApi(miscCache, "getAddress-" + address, ONE_HR, function() {
+	return tryCacheThenRpcApi(miscCache, "getAddress-" + address, FIFTEEN_MIN, function() {
 		return rpcApi.getAddress(address);
 	});
 }
 
-function getRawTransactions(txids) {
+function getRawTransactions(txids, blockhash) {
 	return new Promise(function(resolve, reject) {
 		var promises = [];
 		for (var i = 0; i < txids.length; i++) {
-			promises.push(getRawTransaction(txids[i]));
+			promises.push(getRawTransaction(txids[i], blockhash));
 		}
 
 		Promise.all(promises).then(function(results) {
@@ -664,7 +757,15 @@ function getRawTransactions(txids) {
 	});
 }
 
-function buildBlockAnalysisData(blockHeight, txids, txIndex, results, callback) {
+async function getRawTransactionsByHeights(txids, blockHeightsByTxid) {
+	return Promise.all(txids.map(async txid => {
+		var blockheight = blockHeightsByTxid[txid];
+		var blockhash = blockheight ? await getBlockByHeight(blockheight) : null;
+		return getRawTransaction(txid, blockhash);
+	}))
+}
+
+function buildBlockAnalysisData(blockHeight, blockHash, txids, txIndex, results, callback) {
 	if (txIndex >= txids.length) {
 		callback();
 
@@ -673,10 +774,10 @@ function buildBlockAnalysisData(blockHeight, txids, txIndex, results, callback) 
 
 	var txid = txids[txIndex];
 
-	getRawTransactionsWithInputs([txid]).then(function(txData) {
+	getRawTransactionsWithInputs([txid], -1, blockHash).then(function(txData) {
 		results.push(summarizeBlockAnalysisData(blockHeight, txData.transactions[0], txData.txInputsByTransaction[txid]));
 		
-		buildBlockAnalysisData(blockHeight, txids, txIndex + 1, results, callback);
+		buildBlockAnalysisData(blockHeight, blockHash, txids, txIndex + 1, results, callback);
 	});
 }
 
@@ -715,19 +816,25 @@ function summarizeBlockAnalysisData(blockHeight, tx, inputs) {
 	} else {
 		for (var i = 0; i < tx.vin.length; i++) {
 			var vin = tx.vin[i];
-			var inputVout = inputs[i];
-
-			txSummary.totalInput = txSummary.totalInput.plus(new Decimal(inputVout.value));
-
-			txSummary.vin.push({
+			
+			var txSummaryVin = {
 				txid: tx.vin[i].txid,
 				vout: tx.vin[i].vout,
-				sequence: tx.vin[i].sequence,
-				value: inputVout.value,
-				type: inputVout.scriptPubKey.type,
-				reqSigs: inputVout.scriptPubKey.reqSigs,
-				addressCount: (inputVout.scriptPubKey.addresses ? inputVout.scriptPubKey.addresses.length : 0)
-			});
+				sequence: tx.vin[i].sequence
+			};
+
+			if (inputs) {
+				var inputVout = inputs[i];
+
+				txSummary.totalInput = txSummary.totalInput.plus(new Decimal(inputVout.value));
+
+				txSummaryVin.value = inputVout.value;
+				txSummaryVin.type = inputVout.scriptPubKey.type;
+				txSummaryVin.reqSigs = inputVout.scriptPubKey.reqSigs;
+				txSummaryVin.addressCount = (inputVout.scriptPubKey.addresses ? inputVout.scriptPubKey.addresses.length : 0);
+			}
+
+			txSummary.vin.push(txSummaryVin);
 		}
 	}
 
@@ -756,9 +863,15 @@ function summarizeBlockAnalysisData(blockHeight, tx, inputs) {
 	return txSummary;
 }
 
-function getRawTransactionsWithInputs(txids, maxInputs=-1) {
+function getRawTransactionsWithInputs(txids, maxInputs=-1, blockhash) {
+	// Get just the transactions without their prevouts when txindex is disabled
+	if (!global.txindexAvailable) {
+		return getRawTransactions(txids, blockhash)
+			.then(transactions => ({ transactions, txInputsByTransaction: {} }))
+	}
+
 	return new Promise(function(resolve, reject) {
-		getRawTransactions(txids).then(function(transactions) {
+		getRawTransactions(txids, blockhash).then(function(transactions) {
 			var maxInputsTracked = config.site.txMaxInput;
 			
 			if (maxInputs <= 0) {
@@ -813,10 +926,8 @@ function getRawTransactionsWithInputs(txids, maxInputs=-1) {
 				});
 
 				resolve({ transactions:transactions, txInputsByTransaction:txInputsByTransaction });
-			});
-		}).catch(function(err) {
-			reject(err);
-		});
+			}).catch(reject);
+		}).catch(reject);
 	});
 }
 
@@ -825,6 +936,7 @@ function getBlockByHashWithTransactions(blockHash, txLimit, txOffset) {
 		getBlockByHash(blockHash).then(function(block) {
 			var txids = [];
 			
+			// to get miner info, always include the coinbase tx in the list
 			if (txOffset > 0) {
 				txids.push(block.tx[0]);
 			}
@@ -833,24 +945,507 @@ function getBlockByHashWithTransactions(blockHash, txLimit, txOffset) {
 				txids.push(block.tx[i]);
 			}
 
-			getRawTransactionsWithInputs(txids, config.site.txMaxInput).then(function(txsResult) {
+			getRawTransactionsWithInputs(txids, config.site.txMaxInput, blockHash).then(function(txsResult) {
 				if (txsResult.transactions && txsResult.transactions.length > 0) {
 					block.coinbaseTx = txsResult.transactions[0];
 					block.totalFees = utils.getBlockTotalFeesFromCoinbaseTxAndBlockHeight(block.coinbaseTx, block.height);
 					block.miner = utils.getMinerFromCoinbaseTx(block.coinbaseTx);
 				}
 
-				// if we're on page 2, we don't really want the coinbase tx in the tx list anymore
+				// if we're on page 2+, drop the coinbase tx that was added in order to get miner info
 				if (txOffset > 0) {
 					txsResult.transactions.shift();
 				}
 
 				resolve({ getblock:block, transactions:txsResult.transactions, txInputsByTransaction:txsResult.txInputsByTransaction });
+				
+			}).catch(function(err) {
+				if (!global.txindexAvailable || global.prunedBlockchain) {
+					// likely due to pruning or no txindex, report the error but continue with an empty transaction list
+					resolve({ getblock:block, transactions:[], txInputsByTransaction:{} });
+
+				} else {
+					reject(err);
+				}
+
 			});
-		}).catch(function(err) {
-			reject(err);
-		});
+		}).catch(reject);
 	});
+}
+
+
+
+
+let activeMiningQueueTasks = 0;
+const miningPromiseQueue = async.queue((task, callback) => {
+	activeMiningQueueTasks++;
+
+	task.run(() => {
+		callback();
+
+		activeMiningQueueTasks--;
+	});
+
+}, 30);
+
+function buildMiningSummary(statusId, startBlock, endBlock, statusFunc) {
+	return new Promise(async (resolve, reject) => {
+		try {
+			const blockCount = (endBlock - startBlock + 1);
+			let doneCount = 0;
+
+			const markItemsDone = (count) => {
+				doneCount += count;
+				statusFunc({count: 3 * blockCount + 1, done: doneCount});
+			};
+
+			const summariesByHeight = {};
+			
+
+			for (var i = startBlock; i <= endBlock; i++) {
+				const height = i;
+				const cacheKey = `${height}`;
+
+				let cachedSummary = await miningSummaryCache.get(cacheKey);
+				
+				if (cachedSummary) {
+					summariesByHeight[height] = cachedSummary;
+
+					markItemsDone(3);
+
+				} else {
+					miningPromiseQueue.push({run:async (callback) => {
+						let itemsDone = 0;
+
+						try {
+							const blockHash = await getBlockHashByHeight(height);
+
+							itemsDone++;
+							markItemsDone(1);
+
+							const block = await getBlockByHash(blockHash);
+
+							itemsDone++;
+							markItemsDone(1);
+
+
+							const coinbaseTx = await getRawTransaction(block.tx[0]);
+
+							const minerInfo = utils.getMinerFromCoinbaseTx(coinbaseTx);
+							const totalFees = utils.getBlockTotalFeesFromCoinbaseTxAndBlockHeight(coinbaseTx, height);
+							const subsidy = coinConfig.blockRewardFunction(height, global.activeBlockchain);
+
+							let heightSummary = {
+								mn: (minerInfo ? minerInfo.name : "Unknown"),
+								tx: block.tx.length,
+								f: totalFees,
+								s: subsidy,
+								w: block.weight
+							};
+							
+							miningSummaryCache.set(cacheKey, heightSummary);
+
+							summariesByHeight[height] = heightSummary;
+
+							itemsDone++;
+							markItemsDone(1);
+							
+							callback();
+
+						} catch (e) {
+							utils.logError("430835hre", e);
+
+
+							markItemsDone(3 - itemsDone);
+
+							// resolve anyway
+							callback();
+						}
+					}});
+				}
+			}
+
+
+			if (!miningPromiseQueue.idle()) {
+				await miningPromiseQueue.drain();
+			}
+			
+			
+			var summary = {
+				miners:{},
+				minerNamesSortedByBlockCount: [],
+				overall:{
+					blockCount: 0, totalFees: new Decimal(0), totalSubsidy: new Decimal(0), totalTransactions: 0, totalWeight: 0, subsidyCount: 0
+				}
+			};
+
+			for (var height = startBlock; height <= endBlock; height++) {
+				const blockSummary = summariesByHeight[height];
+				const miner = blockSummary.mn;
+
+				if (!summary.miners[miner]) {
+					summary.minerNamesSortedByBlockCount.push(miner);
+
+					summary.miners[miner] = {
+						name: miner, blocks: [], totalFees: new Decimal(0), totalSubsidy: new Decimal(0), totalTransactions: 0, totalWeight: 0, subsidyCount: 0
+					};
+				}
+
+				summary.miners[miner].blocks.push(height);
+				summary.miners[miner].totalFees = summary.miners[miner].totalFees.plus(blockSummary.f);
+				summary.miners[miner].totalSubsidy = summary.miners[miner].totalSubsidy.plus(blockSummary.s);
+				summary.miners[miner].totalTransactions += blockSummary.tx;
+				summary.miners[miner].totalWeight += blockSummary.w;
+				summary.miners[miner].subsidyCount++;
+
+				summary.overall.blockCount++;
+				summary.overall.totalFees = summary.overall.totalFees.plus(blockSummary.f);
+				summary.overall.totalSubsidy = summary.overall.totalSubsidy.plus(blockSummary.s);
+				summary.overall.totalTransactions += blockSummary.tx;
+				summary.overall.totalWeight += blockSummary.w;
+				summary.overall.subsidyCount++;
+			}
+
+			summary.minerNamesSortedByBlockCount.sort(function(a, b) {
+				return ((summary.miners[a].blocks.length > summary.miners[b].blocks.length) ? -1 : 1);
+			});
+
+
+			// we're done, send final status update
+			statusFunc({count: 3 * blockCount + 1, done: 3 * blockCount + 1});
+
+
+			resolve(summary);
+
+		} catch (err) {
+			utils.logError("208yrwregud9e3", err);
+
+			reject(err);
+		}
+	});
+}
+
+
+
+const mempoolTxSummaryCache = {};
+
+function buildMempoolSummary(statusId, ageBuckets, sizeBuckets, statusFunc) {
+	return new Promise(async (resolve, reject) => {
+		try {
+			const allTxids = await utils.timePromise("promises.mempool-summary.getAllMempoolTxids", getAllMempoolTxids());
+			
+			//const txids = allTxids.slice(0, 50); // for debugging
+			const txids = allTxids;
+
+			const txidCount = txids.length;
+			var doneCount = 0;
+
+			const statusUpdate = () => { statusFunc({count: txidCount, done: doneCount}); };
+
+			const promises = [];
+			const results = [];
+			const txidKeysForCachePurge = {};
+
+			
+
+			for (var i = 0; i < txids.length; i++) {
+				const txid = txids[i];
+				const key = txid.substring(0, 6);
+				txidKeysForCachePurge[key] = 1;
+
+				if (mempoolTxSummaryCache[key]) {
+					const itemSummary = Object.assign({}, mempoolTxSummaryCache[key]);
+					itemSummary.key = key;
+
+					results.push(itemSummary);
+
+					doneCount++;
+					statusUpdate();
+
+				} else {
+					promises.push(new Promise(async (resolve, reject) => {
+						try {
+							const item = await getMempoolTxDetails(txid, false);
+							const itemSummary = {
+								f: item.entry.fees.modified,
+								sz: item.entry.vsize ? item.entry.vsize : item.entry.size,
+								af: item.entry.fees.ancestor,
+								df: item.entry.fees.descendant,
+								dsz: item.entry.descendantsize,
+								t: item.entry.time,
+								w: item.entry.weight ? item.entry.weight : item.entry.size * 4
+							};
+
+							mempoolTxSummaryCache[key] = itemSummary;
+
+							const itemSummaryWithKey = Object.assign({}, itemSummary);
+							itemSummaryWithKey.key = key;
+
+							results.push(itemSummaryWithKey);
+
+							doneCount++;
+							statusUpdate();
+							
+							resolve();
+
+						} catch (e) {
+							utils.logError("31297rg34edwe", e);
+
+
+							doneCount++;
+							statusUpdate();
+
+							// resolve anyway
+							resolve();
+						}
+					}));
+				}
+			}
+
+
+			await Promise.all(promises);
+
+			
+			// purge items from cache that are no longer present in mempool
+			var keysToDelete = [];
+			for (var key in mempoolTxSummaryCache) {
+				if (!txidKeysForCachePurge[key]) {
+					keysToDelete.push(key);
+				}
+			}
+
+			keysToDelete.forEach(x => { delete mempoolTxSummaryCache[x] });
+
+
+			var summary = [];
+
+			var maxFee = 0;
+			var maxFeePerByte = 0;
+			var maxAge = 0;
+			var maxSize = 0;
+			var ages = [];
+			var sizes = [];
+
+			for (var i = 0; i < results.length; i++) {
+				var summary = results[i];
+
+				var fee = summary.f;
+				var size = summary.sz;
+				var feePerByte = summary.f / size;
+				var age = Date.now() / 1000 - summary.t;
+
+				if (fee > maxFee) {
+					maxFee = fee;
+				}
+
+				if (feePerByte > maxFeePerByte) {
+					maxFeePerByte = feePerByte;
+				}
+
+				ages.push({age:age, txidKey:summary.key});
+				sizes.push({size:size, txidKey:summary.key});
+
+				if (age > maxAge) {
+					maxAge = age;
+				}
+
+				if (size > maxSize) {
+					maxSize = size;
+				}
+			}
+
+			ages.sort(function(a, b) {
+				if (a.age != b.age) {
+					return b.age - a.age;
+
+				} else {
+					return a.txidKey.localeCompare(b.txidKey);
+				}
+			});
+
+			sizes.sort(function(a, b) {
+				if (a.size != b.size) {
+					return b.size - a.size;
+
+				} else {
+					return a.txidKey.localeCompare(b.txidKey);
+				}
+			});
+
+			maxSize = 2000;
+
+			const satoshiPerByteBucketMaxima = coinConfig.feeSatoshiPerByteBucketMaxima;
+
+			var bucketCount = satoshiPerByteBucketMaxima.length + 1;
+
+			var satoshiPerByteBuckets = [];
+			var satoshiPerByteBucketLabels = [];
+
+			satoshiPerByteBucketLabels[0] = ("[0 - " + satoshiPerByteBucketMaxima[0] + ")");
+			for (var i = 0; i < bucketCount; i++) {
+				satoshiPerByteBuckets[i] = {
+					count: 0,
+					totalFees: 0,
+					totalBytes: 0,
+					totalWeight: 0,
+					minFeeRate: satoshiPerByteBucketMaxima[i - 1],
+					maxFeeRate: satoshiPerByteBucketMaxima[i]
+				};
+
+				if (i > 0 && i < bucketCount - 1) {
+					satoshiPerByteBucketLabels[i] = ("[" + satoshiPerByteBucketMaxima[i - 1] + " - " + satoshiPerByteBucketMaxima[i] + ")");
+				}
+			}
+
+			var ageBucketCount = ageBuckets;
+			var ageBucketTxCounts = [];
+			var ageBucketLabels = [];
+
+			var sizeBucketCount = sizeBuckets;
+			var sizeBucketTxCounts = [];
+			var sizeBucketLabels = [];
+
+			for (var i = 0; i < ageBucketCount; i++) {
+				var rangeMin = i * maxAge / ageBucketCount;
+				var rangeMax = (i + 1) * maxAge / ageBucketCount;
+
+				ageBucketTxCounts.push(0);
+
+				if (maxAge > 600) {
+					var rangeMinutesMin = new Decimal(rangeMin / 60).toFixed(1);
+					var rangeMinutesMax = new Decimal(rangeMax / 60).toFixed(1);
+
+					ageBucketLabels.push(rangeMinutesMin + " - " + rangeMinutesMax + " min");
+
+				} else {
+					ageBucketLabels.push(parseInt(rangeMin) + " - " + parseInt(rangeMax) + " sec");
+				}
+			}
+
+			for (var i = 0; i < sizeBucketCount; i++) {
+				sizeBucketTxCounts.push(0);
+
+				if (i == sizeBucketCount - 1) {
+					sizeBucketLabels.push(parseInt(i * maxSize / sizeBucketCount) + "+");
+
+				} else {
+					sizeBucketLabels.push(parseInt(i * maxSize / sizeBucketCount) + " - " + parseInt((i + 1) * maxSize / sizeBucketCount));
+				}
+			}
+
+			satoshiPerByteBucketLabels[bucketCount - 1] = (satoshiPerByteBucketMaxima[satoshiPerByteBucketMaxima.length - 1] + "+");
+
+			const oldestLargestCount = 20;
+
+			var summary = {
+				"count": 0,
+				"totalFees": 0,
+				"totalBytes": 0,
+				"totalWeight": 0,
+				"satoshiPerByteBuckets": satoshiPerByteBuckets,
+				"satoshiPerByteBucketLabels": satoshiPerByteBucketLabels,
+				"ageBucketTxCounts": ageBucketTxCounts,
+				"ageBucketLabels": ageBucketLabels,
+				"sizeBucketTxCounts": sizeBucketTxCounts,
+				"sizeBucketLabels": sizeBucketLabels,
+				"oldestTxs": ages.slice(0, oldestLargestCount),
+				"largestTxs": sizes.slice(0, oldestLargestCount)
+			};
+
+
+			for (var i = 0; i < oldestLargestCount; i++) {
+				let oldTx = summary.oldestTxs[i];
+				let largeTx = summary.largestTxs[i];
+
+				for (var j = 0; j < txids.length; j++) {
+					if (oldTx && txids[j].startsWith(oldTx.txidKey)) {
+						oldTx.txid = txids[j];
+
+						break;
+					}
+				}
+
+				for (var j = 0; j < txids.length; j++) {
+					if (largeTx && txids[j].startsWith(largeTx.txidKey)) {
+						largeTx.txid = txids[j];
+
+						break;
+					}
+				}
+			}
+
+			for (var x = 0; x < results.length; x++) {
+				var txMempoolInfo = results[x];
+				var fee = txMempoolInfo.f;
+				var size = txMempoolInfo.sz;
+				var weight = txMempoolInfo.w;
+				var feePerByte = txMempoolInfo.f / size;
+				var satoshiPerByte = feePerByte * 100000000; // TODO: magic number - replace with coinConfig.baseCurrencyUnit.multiplier
+				var age = Date.now() / 1000 - txMempoolInfo.t;
+
+				var addedToBucket = false;
+				for (var i = 0; i < satoshiPerByteBucketMaxima.length; i++) {
+					if (satoshiPerByteBucketMaxima[i] > satoshiPerByte) {
+						satoshiPerByteBuckets[i]["count"]++;
+						satoshiPerByteBuckets[i]["totalFees"] += fee;
+						satoshiPerByteBuckets[i]["totalBytes"] += size;
+						satoshiPerByteBuckets[i]["totalWeight"] += weight;
+
+						addedToBucket = true;
+
+						break;
+					}
+				}
+
+				if (!addedToBucket) {
+					satoshiPerByteBuckets[bucketCount - 1]["count"]++;
+					satoshiPerByteBuckets[bucketCount - 1]["totalFees"] += fee;
+					satoshiPerByteBuckets[bucketCount - 1]["totalBytes"] += size;
+					satoshiPerByteBuckets[bucketCount - 1]["totalWeight"] += weight;
+				}
+
+				summary["count"]++;
+				summary["totalFees"] += fee;
+				summary["totalBytes"] += size;
+				summary["totalWeight"] += weight;
+
+				var ageBucketIndex = Math.min(ageBucketCount - 1, parseInt(age / (maxAge / ageBucketCount)));
+				var sizeBucketIndex = Math.min(sizeBucketCount - 1, parseInt(size / (maxSize / sizeBucketCount)));
+
+				ageBucketTxCounts[ageBucketIndex]++;
+				sizeBucketTxCounts[sizeBucketIndex]++;
+			}
+
+			summary["averageFee"] = summary["totalFees"] / summary["count"];
+			summary["averageFeePerByte"] = summary["totalFees"] / summary["totalBytes"];
+
+			summary["satoshiPerByteBucketMaxima"] = satoshiPerByteBucketMaxima;
+			summary["satoshiPerByteBucketCounts"] = [];
+			summary["satoshiPerByteBucketTotalFees"] = [];
+
+			for (var i = 0; i < bucketCount; i++) {
+				summary["satoshiPerByteBucketCounts"].push(summary["satoshiPerByteBuckets"][i]["count"]);
+				summary["satoshiPerByteBucketTotalFees"].push(summary["satoshiPerByteBuckets"][i]["totalFees"]);
+			}
+
+
+			// we're done, send final status update
+			doneCount = txidCount;
+			statusUpdate();
+
+
+			resolve(summary);
+
+		} catch (err) {
+			utils.logError("23947ryfuedge", err);
+
+			reject(err);
+		}
+	});
+}
+
+function getTxOut(txid, vout) {
+	return rpcApi.getTxOut(txid, vout)
 }
 
 function getHelp() {
@@ -982,9 +1577,11 @@ module.exports = {
 	getNetworkInfo: getNetworkInfo,
 	getNetTotals: getNetTotals,
 	getMempoolInfo: getMempoolInfo,
-	getMempoolTxids: getMempoolTxids,
+	getAllMempoolTxids: getAllMempoolTxids,
 	getMiningInfo: getMiningInfo,
+	getIndexInfo: getIndexInfo,
 	getBlockByHeight: getBlockByHeight,
+	getBlockHashByHeight: getBlockHashByHeight,
 	getBlocksByHeight: getBlocksByHeight,
 	getBlockByHash: getBlockByHash,
 	getBlocksByHash: getBlocksByHash,
@@ -992,6 +1589,7 @@ module.exports = {
 	getRawTransaction: getRawTransaction,
 	getRawTransactions: getRawTransactions,
 	getRawTransactionsWithInputs: getRawTransactionsWithInputs,
+	getRawTransactionsByHeights: getRawTransactionsByHeights,
 	getTxUtxos: getTxUtxos,
 	getMempoolTxDetails: getMempoolTxDetails,
 	getUptimeSeconds: getUptimeSeconds,
@@ -1001,7 +1599,7 @@ module.exports = {
 	logCacheSizes: logCacheSizes,
 	getPeerSummary: getPeerSummary,
 	getChainTxStats: getChainTxStats,
-	getMempoolDetails: getMempoolDetails,
+	getMempoolTxids: getMempoolTxids,
 	getTxCountStats: getTxCountStats,
 	getSmartFeeEstimates: getSmartFeeEstimates,
 	getSmartFeeEstimate: getSmartFeeEstimate,
@@ -1012,5 +1610,8 @@ module.exports = {
 	getBlocksStatsByHeight: getBlocksStatsByHeight,
 	buildBlockAnalysisData: buildBlockAnalysisData,
 	getBlockHeaderByHeight: getBlockHeaderByHeight,
-	getBlockHeadersByHeight: getBlockHeadersByHeight
+	getBlockHeadersByHeight: getBlockHeadersByHeight,
+	getTxOut: getTxOut,
+	buildMempoolSummary: buildMempoolSummary,
+	buildMiningSummary: buildMiningSummary
 };

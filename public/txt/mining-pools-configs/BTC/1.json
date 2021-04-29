@@ -5,10 +5,18 @@
             "link": "https://mining.luxor.tech"
         },
         "/1THash&58COIN/": {
-            "name": "58COIN&1THash",
+            "name": "1THash",
+            "link": "https://www.1thash.top"
+        },
+        "/1THash/": {
+            "name": "1THash",
             "link": "https://www.1thash.top"
         },
         "/BTC.COM/" : {
+            "name" : "BTC.com",
+            "link" : "https://pool.btc.com"
+        },
+        "/BTC.com/" : {
             "name" : "BTC.com",
             "link" : "https://pool.btc.com"
         },
@@ -18,11 +26,11 @@
         },
         "/Huobi/": {
             "name": "Huobi.pool",
-            "link": "https://www.poolhb.com/"
+            "link": "https://www.hpt.com/"
         },
         "/HuoBi/": {
             "name": "Huobi.pool",
-            "link": "https://www.poolhb.com/"
+            "link": "https://www.hpt.com/"
         },
         "/E2M & BTC.TOP/": {
             "name": "WAYI.CN",
@@ -478,7 +486,7 @@
         },
         "/Binance/": {
             "name" : "Binance Pool",
-            "link" : "https://pool.binancezh.com/"
+            "link" : "https://pool.binance.com/"
         },
         "/Minerium.com/" : {
             "name" : "Minerium",
@@ -495,6 +503,42 @@
         "/hash.okkong.com/" : {
             "name" : "OKKONG",
             "link" : "https://hash.okkong.com"
+        },
+        "/TMSPOOL/" : {
+            "name" : "TMSPool",
+            "link" : "https://btc.tmspool.top"
+        },
+        "/one_more_mcd/" : {
+            "name" : "EMCDPool",
+            "link" : "https://pool.emcd.io"
+        },
+        "/Foundry USA Pool #dropgold/" : {
+            "name" : "Foundry USA",
+            "link" : "https://foundrydigital.com/"
+        },
+         "/2cDw/" : {
+            "name" : "Foundry USA",
+            "link" : "https://foundrydigital.com/"
+        },
+        "/SBICrypto.com Pool/" : {
+            "name" : "SBI Crypto",
+            "link" : "https://sbicrypto.com"
+        },
+        "SBI Crypto": {
+            "name": "SBI Crypto",
+            "link": "https://www.sbicrypto.com"
+        },
+        "SBICrypto": {
+            "name": "SBI Crypto",
+            "link": "https://www.sbicrypto.com"
+       	},
+        "/ArkPool/": {
+            "name": "ArkPool",
+            "link": "https://www.arkpool.com/"
+        },
+        "/PureBTC.COM/": {
+            "name": "PureBTC.COM",
+            "link": "https://purebtc.com"
         }
     },
     "payout_addresses" : {
@@ -575,8 +619,20 @@
             "link" : "https://www.f2pool.com/"
         },
         "3HuobiNg2wHjdPU2mQczL9on8WF7hZmaGd" : {
-            "name" : "Huobi",
-            "link" : "http://www.huobi.com/"
+            "name" : "Huobi.pool",
+            "link" : "https://www.hpt.com/"
+        },
+        "18Zcyxqna6h7Z7bRjhKvGpr8HSfieQWXqj" : {
+            "name" : "Huobi.pool",
+            "link" : "https://www.hpt.com/"
+        },
+        "1EepjXgvWUoRyNvuLSAxjiqZ1QqKGDANLW" : {
+            "name" : "Huobi.pool",
+            "link" : "https://www.hpt.com/"
+        },
+        "1MvYASoHjqynMaMnP7SBmenyEWiLsTqoU6" : {
+            "name" : "Huobi.pool",
+            "link" : "https://www.hpt.com/"
         },
         "1ALA5v7h49QT7WYLcRsxcXqXUqEqaWmkvw" : {
             "name" : "CloudHashing",
@@ -742,6 +798,10 @@
             "name" : "BTC.com",
             "link" : "https://pool.btc.com"
         },
+        "1Bf9sZvBHPFGVPX71WX2njhd1NXKv5y7v5" : {
+            "name" : "BTC.com",
+            "link" : "https://pool.btc.com"
+        },
         "18EPLvrs2UE11kWBB3ABS7Crwj5tTBYPoa" : {
             "name" : "GoGreenLight",
             "link" : "http://www.gogreenlight.se/"
@@ -877,10 +937,6 @@
         "12Taz8FFXQ3E2AGn3ZW1SZM5bLnYGX4xR6" : {
             "name" : "Tangpool",
             "link" : "http://www.tangpool.com/"
-        },
-        "1MvYASoHjqynMaMnP7SBmenyEWiLsTqoU6" : {
-            "name": "Huobi.pool",
-            "link": "https://www.poolhb.com/"
         },
         "1M1Xw2rczxkF3p3wiNHaTmxvbpZZ7M6vaa" : {
             "name": "1M1X",
@@ -1060,19 +1116,51 @@
         },
         "1DSh7vX6ed2cgTeKPwufV5i4hSi4pp373h": {
             "name" : "Binance Pool",
-            "link" : "https://pool.binancezh.com/"
+            "link" : "https://pool.binance.com/"
         },
         "16moWjUJVRnDQKqhoCdcszfJg9wzBdoTHw": {
             "name" : "Binance Pool",
-            "link" : "https://pool.binancezh.com/"
+            "link" : "https://pool.binance.com/"
         },
         "bc1qx9t2l3pyny2spqpqlye8svce70nppwtaxwdrp4": {
             "name" : "Binance Pool",
-            "link" : "https://pool.binancezh.com/"
+            "link" : "https://pool.binance.com/"
         },
         "34Jpa4Eu3ApoPVUKNTN2WeuXVVq1jzxgPi": {
             "name" : "Lubian.com",
             "link" : "http://www.lubian.com/"
+        },
+        "1FFxkVijzvUPUeHgkFjBk2Qw8j3wQY2cDw" : {
+            "name" : "Foundry USA",
+            "link" : "https://foundrydigital.com/"
+        },
+        "1QEiAhdHdMhBgVbDM7zUXWGkNhgEEJ6uLd": {
+            "name": "ArkPool",
+            "link": "https://www.arkpool.com/"
+        },
+        "147SwRQdpCfj5p8PnfsXV2SsVVpVcz3aPq": {
+            "name": "1THash",
+            "link": "https://www.1thash.top"
+        },
+        "15vgygQ7ZsWdvZpctmTZK4673QBHsos6Sh": {
+            "name": "1THash",
+            "link": "https://www.1thash.top"
+        },
+        "bc1qnnl503n04cqacpwvhr89qr70metxr79ht3n380": {
+            "name": "Rawpool",
+            "link": "https://www.rawpool.com"
+        },
+        "bc1qwlrsvgtn99rqp3fgaxq6f6jkgms80rnej0a8tc": {
+            "name": "Rawpool",
+            "link": "https://www.rawpool.com"
+        },
+        "bc1q8ej2g5uxdsg0jwl0mpl606qfjxgkyv3p29yf37": {
+            "name": "Rawpool",
+            "link": "https://www.rawpool.com"
+        },
+        "bc1qru8mtv3e3u7ms6ecjmwgeakdakclemvhnw00q9": {
+            "name": "Rawpool",
+            "link": "https://www.rawpool.com"
         }
     }
 }
