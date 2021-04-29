@@ -51,19 +51,6 @@ div.row.index-summary
 							span 10
 							sup #{difficultyData[1].exponent}
 
-				tr
-					th.px-2.px-lg-0.px-xl-2
-						i.fas.fa-unlock.mr-1.summary-icon
-						span Pending Tx
-					td.text-right.text-monospace
-						- var colorClass = "text-success";
-						if (mempoolInfo.size > 7000)
-							- colorClass = "text-warning";
-						if (mempoolInfo.size > 11000)
-							- colorClass = "text-danger";
-
-						span(class=colorClass) #{mempoolInfo.size.toLocaleString()}
-
 				if (smartFeeEstimates)
 					tr
 						th.px-2.px-lg-0.px-xl-2
@@ -88,9 +75,6 @@ div.row.index-summary
 						small.ml-1 (e#{difficultyPeriod.toLocaleString()})
 					td.text-right.text-monospace
 						- var firstBlockHeader = difficultyPeriodFirstBlockHeader;
-						- var currentBlock = latestBlocks[0];
-						- var heightDiff = currentBlock.height - firstBlockHeader.height;
-						- var timeDiff = currentBlock.mediantime - firstBlockHeader.mediantime;
 						- var timePerBlock = timeDiff / heightDiff;
 						- var timePerBlockDuration = moment.duration(timePerBlock * 1000);
 						- var daysUntilAdjustment = new Decimal(blocksUntilDifficultyAdjustment).times(timePerBlock).dividedBy(60 * 60 * 24);
