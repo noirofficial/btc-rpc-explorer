@@ -229,6 +229,10 @@ function getMempoolInfo() {
 	return tryCacheThenRpcApi(miscCache, "getMempoolInfo", 5 * ONE_SEC, rpcApi.getMempoolInfo);
 }
 
+function masternodeList() {
+	return tryCacheThenRpcApi(miscCache, "masternodeList", 5 * ONE_SEC, rpcApi.masternodeList);
+}
+
 function getIndexInfo() {
 	return tryCacheThenRpcApi(miscCache, "getIndexInfo", 10 * ONE_SEC, rpcApi.getIndexInfo);
 }
@@ -1577,6 +1581,7 @@ module.exports = {
 	getNetworkInfo: getNetworkInfo,
 	getNetTotals: getNetTotals,
 	getMempoolInfo: getMempoolInfo,
+	masternodeList: masternodeList,
 	getAllMempoolTxids: getAllMempoolTxids,
 	getMiningInfo: getMiningInfo,
 	getIndexInfo: getIndexInfo,

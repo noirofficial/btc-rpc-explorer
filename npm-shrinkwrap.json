@@ -1166,6 +1166,7 @@
 			"version": "0.8.8",
 			"resolved": "https://registry.npmjs.org/dtrace-provider/-/dtrace-provider-0.8.8.tgz",
 			"integrity": "sha512-b7Z7cNtHPhH9EJhNNbbeqTcXB8LGFFZhq1PGgEvpeHlzd36bhbdTWoE/Ba/YguqpBSlAPKnARWhVlhunCMwfxg==",
+			"hasInstallScript": true,
 			"optional": true,
 			"dependencies": {
 				"nan": "^2.14.0"
@@ -1320,6 +1321,7 @@
 			"version": "1.3.0",
 			"resolved": "https://registry.npmjs.org/event-loop-stats/-/event-loop-stats-1.3.0.tgz",
 			"integrity": "sha512-CRto3Zyg3YE3AaBM/hPc7mJrbSOhy32P1wqIsZpp4rPHrj5qQavLUJKf+8fFq13ahC24T+RcX3f3fK13ElYZNw==",
+			"hasInstallScript": true,
 			"optional": true,
 			"dependencies": {
 				"nan": "^2.14.0"
@@ -4423,6 +4425,7 @@
 			"version": "1.1.6",
 			"resolved": "https://registry.npmjs.org/tiny-secp256k1/-/tiny-secp256k1-1.1.6.tgz",
 			"integrity": "sha512-FmqJZGduTyvsr2cF3375fqGHUovSwDi/QytexX1Se4BPuPZpTE5Ftp5fg+EFSuEf3lhZqgCRjEG3ydUQ/aNiwA==",
+			"hasInstallScript": true,
 			"dependencies": {
 				"bindings": "^1.3.0",
 				"bn.js": "^4.11.8",

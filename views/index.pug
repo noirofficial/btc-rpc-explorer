@@ -1,7 +1,7 @@
 extends layout
 
 block headContent
-	title Bitcoin Explorer
+	title Noir Explorer
 	
 block content
 	if (getblockchaininfo == null)
@@ -16,43 +16,7 @@ block content
 					p
 						b If you believe your bitcoind node is already initialized...
 						div Check your RPC connection info and/or check this application's error log for possible hints about the cause of this issue.
-	else
-
-		+dismissableInfoAlert("homepageWelcomeBannerDismissed")
-			.clearfix
-				.float-start
-					h4.fw-light.mb-2 Welcome to Bitcoin Explorer!
-				.float-start
-					if (config.demoSite)
-						- var networkNameMap = {"main": "Mainnet", "test": "Testnet", "signet": "Signet"};
-						span.badge.bg-primary.mb-1.ms-0.ms-md-3.mt-1(title=`This is a public demo, but this tool is designed to be installed and run by all Bitcoiners...<br/><i>Don't Trust, Verify</i>!`, data-bs-toggle="tooltip", data-bs-html="true")
-							span.me-2 #{networkNameMap[global.activeBlockchain]} Demo
-							i.fas.fa-sticky-note
-			
-
-			.mb-2 An easy-to-use, educational explorer whose <u>only dependency is your <b>Bitcoin Core</b> node</u>!
-			.mb-3
-				- var features = ["Open-Source", "Easy Setup", "Low Hardware Requirements", "Fun!"];
-
-				each feature in features
-					span.badge.bg-light.text-dark.border.me-2
-						span.me-2 #{feature}
-						i.fas.fa-check
-			
-			.mt-4.mb-2
-				if (global.sourcecodeProjectMetadata)
-					a.btn.btn-primary.mb-2.mb-md-1.me-3(href="https://github.com/janoside/btc-rpc-explorer", title="View source code on Github", data-bs-toggle="tooltip", data-bs-placement="bottom")
-						i.fab.fa-github.fa-lg.me-2
-						| View Source
-
-				a.btn.btn-primary.mb-2.mb-md-1.me-3(href="https://donate.bitcoinexplorer.org", target="_blank", title="Support this project with a donation", data-bs-toggle="tooltip", data-bs-placement="bottom")
-					i.fas.fa-heart.text-danger.fa-lg.me-2
-					| Donate
-
-				a.btn.btn-primary.mb-2.mb-md-1(href="https://twitter.com/BitcoinExplorer", target="_blank", title="Follow @BitcoinExplorer on Twitter", data-bs-toggle="tooltip", data-bs-placement="bottom")
-					i.fab.fa-twitter.text-twitter.fa-lg.me-2
-					| @BitcoinExplorer
-					
+	else					
 
 				
 

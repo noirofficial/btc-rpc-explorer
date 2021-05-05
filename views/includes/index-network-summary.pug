@@ -5,6 +5,8 @@ if (exchangeRates || networkVolume)
 - var utxoCalculatingDesc = "At startup the app pulls a summary of the UTXO set. Until this summary is retrieved this data can't be displayed. Wait for the summary request to your node to return, then refresh this page.";
 
 
+
+
 if (exchangeRates)
 	+contentSection("Market")
 		- var colCount = 3 + (networkVolume ? 1 : 0) + (goldExchangeRates ? 1 : 0);
@@ -70,7 +72,7 @@ if (exchangeRates)
 				i.fas.fa-server.text-muted
 
 +contentSection
-	+summaryRow(1 + (hashrate7d ? 1 : 0) + (chainTxStats && chainTxStats[7 * targetBlocksPerDay] ? 1 : 0) + (difficultyAdjustmentData ? 1 : 0))
+	+summaryRow(1 + (hashrate7d ? 1 : 0) + (chainTxStats && chainTxStats[7 * targetBlocksPerDay] ? 1 : 0) + (difficultyAdjustmentData ? 1 : 0) + 1)
 		if (hashrate7d)
 			+summaryItem("7d Hashrate", "The average hashrate of the global mining network over the last 7 days. A comparison to the 30-day average is included to help gauge the rate of change.")
 				- var hashrate7dayData = utils.formatLargeNumber(hashrate7d, 1);
@@ -87,6 +89,7 @@ if (exchangeRates)
 							if (ratio > 1)
 								- var ratioPercent = new Decimal(ratio).times(100).minus(100);
 								span.text-success +#{ratioPercent.toDP(1)}%
+
 							else
 								- var ratioPercent = new Decimal(100).minus(new Decimal(ratio).times(100));
 								span.text-danger -#{ratioPercent.toDP(1)}%
@@ -130,6 +133,9 @@ if (exchangeRates)
 					| (
 					span.border-dotted(title=`${estimatedSupply.dividedBy(maxSupply).times(100).toDP(4)}% have been mined into circulation`, data-bs-toggle="tooltip") #{estimatedSupply.dividedBy(maxSupply).times(100).toDP(1)}%
 					| )
+
+		+summaryItem("Masternodes", `This value is the amount of active Masternodes in the network.`)
+			span #{masternodeListSize.toLocaleString()}
 
 		
 

@@ -74,6 +74,13 @@ router.get("/", asyncHandler(async (req, res, next) => {
 		}));
 
 		promises.push(new Promise(async (resolve, reject) => {
+			var masternodeList = await utils.timePromise("promises.index.masternodeList", coreApi.masternodeList());
+			res.locals.masternodeListSize = Object.values(masternodeList).length;
+			
+			resolve();
+		}));
+
+		promises.push(new Promise(async (resolve, reject) => {
 			res.locals.miningInfo = await utils.timePromise("promises.index.getMiningInfo", coreApi.getMiningInfo());
 
 			resolve();

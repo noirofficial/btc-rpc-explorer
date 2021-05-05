@@ -30,6 +30,10 @@ function getMempoolInfo() {
 	return getRpcData("getmempoolinfo");
 }
 
+function masternodeList() {
+	return getRpcData("masternodelist");
+}
+
 function getUptimeSeconds() {
 	return getRpcData("uptime");
 }
@@ -304,6 +308,7 @@ module.exports = {
 	getNetworkInfo: getNetworkInfo,
 	getNetTotals: getNetTotals,
 	getMempoolInfo: getMempoolInfo,
+	masternodeList: masternodeList,
 	getBlockByHeight: getBlockByHeight,
 	getBlocksByHeight: getBlocksByHeight,
 	getBlockByHash: getBlockByHash,

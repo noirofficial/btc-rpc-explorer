@@ -322,7 +322,7 @@ async function onRpcConnectionVerified(getnetworkinfo, getblockchaininfo) {
 		global.pruneHeight = getblockchaininfo.pruneheight;
 	}
 
-	var bitcoinCoreVersionRegex = /^.*\/Satoshi\:(.*)\/.*$/;
+	var bitcoinCoreVersionRegex = /^.*\/Noir\:(.*)\/.*$/;
 
 	var match = bitcoinCoreVersionRegex.exec(getnetworkinfo.subversion);
 	if (match) {
@@ -475,7 +475,6 @@ function refreshNetworkVolumes() {
 		var promises = [];
 
 		var blocksPerDay = 144 + 20; // 20 block padding
-		console.log(result.blocks);
 
 		for (var i = 0; i < (blocksPerDay * 1); i++) {
 			if (result.blocks - i >= 0) {
@@ -833,7 +832,7 @@ expressApp.use(function(err, req, res, next) {
 	res.status(err.status || 500);
 	res.render('error', {
 		message: err.message,
-		error: {}
+		error: err
 	});
 });
 

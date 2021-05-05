@@ -1,5 +1,7 @@
-var Decimal = require("decimal.js");
-Decimal8 = Decimal.clone({ precision:8, rounding:8 });
+"use strict";
+
+const Decimal = require("decimal.js");
+const Decimal8 = Decimal.clone({ precision:8, rounding:8 });
 
 var currencyUnits = [
 	{
@@ -42,11 +44,27 @@ module.exports = {
 		"regtest":"./img/logo/nor.svg",
 		"signet":"./img/logo/nor.svg"
 	},
+	coinIconUrlsByNetwork:{
+		"main":"./img/logo/nor.svg",
+		"test":"./img/logo/nor.svg",
+		"signet":"./img/logo/nor.svg"
+	},
+	coinColorsByNetwork: {
+		"main": "#480027",
+		"test": "#77304f",
+		"signet": "#270000",
+		"regtest": "#777"
+	},
 	siteTitlesByNetwork: {
 		"main":"Noir Explorer",
 		"test":"Noir Testnet Explorer",
 		"regtest":"Noir Regtest Explorer",
 		"signet":"Noir Signet Explorer",
+	},
+	knownTransactionsByNetwork: {
+		main: "1646db34f423b77ea40d5bfc35c63beb7c53975ff7f83e1971115ed3cf6c152a",
+		test: "1646db34f423b77ea40d5bfc35c63beb7c53975ff7f83e1971115ed3cf6c152a",
+		signet: "1646db34f423b77ea40d5bfc35c63beb7c53975ff7f83e1971115ed3cf6c152a"
 	},
 	siteDescriptionHtml:"<b>NOR Explorer</b> is <a href='https://github.com/noirofficial/nor-rpc-explorer). If you run your own [Noir Full Node](https://noirofficial.org/#wallets), **NOR Explorer** can easily run alongside it, communicating via RPC calls. See the project [ReadMe](https://github.com/noirofficial/nor-rpc-explorer) for a list of features and instructions for running.",
 	nodeTitle:"Noir Full Node",
@@ -70,6 +88,22 @@ module.exports = {
 	baseCurrencyUnit:currencyUnits[3],
 	defaultCurrencyUnit:currencyUnits[0],
 	feeSatoshiPerByteBucketMaxima: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 50, 75, 100, 150],
+	
+	halvingBlockIntervalsByNetwork: {
+		"main": 0,
+		"test": 0,
+		"regtest": 0,
+		"signet": 0
+	},
+
+	// used for supply estimates that don't need full gettxoutset accuracy
+	coinSupplyCheckpointsByNetwork: {
+		"main": [ 0, new Decimal(0) ],
+		"test": [ 0, new Decimal(0) ],
+		"signet": [ 0, new Decimal(0) ],
+		"regtest": [ 0, new Decimal(0) ]
+	},
+	
 	genesisBlockHashesByNetwork:{
 		"main":	"000006a09dc95e0eb30c677e1c8a01080e2c49d1dd22ad1479492c61ffde9177",
 		"test":	"00000dc0f9a616345cb61c95b51f9863d3a3c3978561304670f89464ff9f3b90",
